@@ -4,8 +4,7 @@ class Presentation {
         this.totalSlides = this.slides.length;
         this.currentSlide = 1;
         
-        this.prevBtn = document.getElementById('prevBtn');
-        this.nextBtn = document.getElementById('nextBtn');
+        // Remove button dependencies
         this.currentSlideEl = document.getElementById('currentSlide');
         this.totalSlidesEl = document.getElementById('totalSlides');
         this.progressFill = document.getElementById('progressFill');
@@ -19,9 +18,8 @@ class Presentation {
         this.totalSlidesEl.textContent = this.totalSlides;
         this.updateProgress();
         
-        // Add event listeners
-        this.prevBtn.addEventListener('click', () => this.previousSlide());
-        this.nextBtn.addEventListener('click', () => this.nextSlide());
+        // Initialize comprehensive remote control support
+        this.initializeRemoteControl();
         
         // Keyboard navigation
         document.addEventListener('keydown', (e) => this.handleKeyPress(e));
@@ -30,12 +28,97 @@ class Presentation {
         this.setupTouchGestures();
         
         // Initial state
-        this.updateNavigationButtons();
         this.showSlide(this.currentSlide);
         
         // Auto-focus for keyboard navigation
         document.body.tabIndex = 0;
         document.body.focus();
+    }
+    
+    // Initialize comprehensive remote control support
+    initializeRemoteControl() {
+        // Gamepad API support for game controllers and some remote controls
+        let gamepadIndex = -1;
+        
+        window.addEventListener('gamepadconnected', (e) => {
+            console.log('Gamepad/Remote connected:', e.gamepad.id);
+            gamepadIndex = e.gamepad.index;
+            this.startGamepadPolling(gamepadIndex);
+        });
+        
+        window.addEventListener('gamepaddisconnected', (e) => {
+            console.log('Gamepad/Remote disconnected');
+            gamepadIndex = -1;
+        });
+        
+        // Focus management for better remote control support
+        document.addEventListener('focus', () => {
+            // Ensure the document can receive key events
+            if (document.activeElement === document.body) {
+                document.body.focus();
+            }
+        });
+        
+        // Make sure the document can receive focus
+        document.body.setAttribute('tabindex', '-1');
+        document.body.focus();
+    }
+    
+    // Gamepad polling function
+    startGamepadPolling(gamepadIndex) {
+        let lastButtonStates = {};
+        
+        const pollGamepad = () => {
+            if (gamepadIndex === -1) return;
+            
+            const gamepad = navigator.getGamepads()[gamepadIndex];
+            if (!gamepad) return;
+            
+            // Check D-pad and buttons
+            const buttons = gamepad.buttons;
+            
+            // D-pad left (button 14) or left stick left
+            if ((buttons[14] && buttons[14].pressed && !lastButtonStates[14]) || 
+                (gamepad.axes[0] < -0.5 && !lastButtonStates['axisLeft'])) {
+                this.previousSlide();
+                lastButtonStates[14] = true;
+                lastButtonStates['axisLeft'] = true;
+            } else if ((!buttons[14] || !buttons[14].pressed) && gamepad.axes[0] > -0.5) {
+                lastButtonStates[14] = false;
+                lastButtonStates['axisLeft'] = false;
+            }
+            
+            // D-pad right (button 15) or left stick right
+            if ((buttons[15] && buttons[15].pressed && !lastButtonStates[15]) || 
+                (gamepad.axes[0] > 0.5 && !lastButtonStates['axisRight'])) {
+                this.nextSlide();
+                lastButtonStates[15] = true;
+                lastButtonStates['axisRight'] = true;
+            } else if ((!buttons[15] || !buttons[15].pressed) && gamepad.axes[0] < 0.5) {
+                lastButtonStates[15] = false;
+                lastButtonStates['axisRight'] = false;
+            }
+            
+            // A button (button 0) for next
+            if (buttons[0] && buttons[0].pressed && !lastButtonStates[0]) {
+                this.nextSlide();
+                lastButtonStates[0] = true;
+            } else if (!buttons[0] || !buttons[0].pressed) {
+                lastButtonStates[0] = false;
+            }
+            
+            // B button (button 1) for previous
+            if (buttons[1] && buttons[1].pressed && !lastButtonStates[1]) {
+                this.previousSlide();
+                lastButtonStates[1] = true;
+            } else if (!buttons[1] || !buttons[1].pressed) {
+                lastButtonStates[1] = false;
+            }
+            
+            requestAnimationFrame(pollGamepad);
+        };
+        
+        pollGamepad();
     }
     
     showSlide(slideNumber) {
@@ -57,7 +140,6 @@ class Presentation {
         this.currentSlide = slideNumber;
         this.currentSlideEl.textContent = this.currentSlide;
         this.updateProgress();
-        this.updateNavigationButtons();
     }
     
     animateSlideContent(slide) {
@@ -291,15 +373,17 @@ class Presentation {
     nextSlide() {
         if (this.currentSlide < this.totalSlides) {
             this.showSlide(this.currentSlide + 1);
-            this.addSlideSound();
+            return true;
         }
+        return false;
     }
     
     previousSlide() {
         if (this.currentSlide > 1) {
             this.showSlide(this.currentSlide - 1);
-            this.addSlideSound();
+            return true;
         }
+        return false;
     }
     
     updateProgress() {
@@ -307,107 +391,179 @@ class Presentation {
         this.progressFill.style.width = `${progress}%`;
     }
     
-    updateNavigationButtons() {
-        this.prevBtn.disabled = this.currentSlide === 1;
-        this.nextBtn.disabled = this.currentSlide === this.totalSlides;
-    }
-    
+    // Enhanced keyboard input handling (including remote control keys)
     handleKeyPress(e) {
+        // Prevent default behavior for navigation keys
+        const navigationKeys = [
+            'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+            'PageUp', 'PageDown', 'Home', 'End',
+            'Space', 'Enter', 'Escape'
+        ];
+        
+        if (navigationKeys.includes(e.key)) {
+            e.preventDefault();
+        }
+        
+        // Flag to track if we handled the event
+        let handled = false;
+        
+        // Handle modern key events first
         switch(e.key) {
-            case 'ArrowRight':
-            case ' ':
-            case 'Enter':
-                e.preventDefault();
-                this.nextSlide();
-                break;
+            // Standard arrow keys
             case 'ArrowLeft':
-            case 'Backspace':
-                e.preventDefault();
+            case 'ArrowUp':
+            case 'PageUp':
                 this.previousSlide();
+                handled = true;
                 break;
+                
+            case 'ArrowRight':
+            case 'ArrowDown':
+            case 'PageDown':
+            case 'Space':
+                this.nextSlide();
+                handled = true;
+                break;
+                
+            // Home/End keys
             case 'Home':
-                e.preventDefault();
                 this.showSlide(1);
+                handled = true;
                 break;
+                
             case 'End':
-                e.preventDefault();
                 this.showSlide(this.totalSlides);
+                handled = true;
                 break;
-            case 'Escape':
-                e.preventDefault();
-                this.toggleFullscreen();
+                
+            // Number keys for direct navigation
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                const slideNum = parseInt(e.key);
+                if (slideNum <= this.totalSlides) {
+                    this.showSlide(slideNum);
+                }
+                handled = true;
                 break;
+                
+            // Remote control specific keys
+            case 'MediaTrackNext':
+            case 'MediaPlayPause':
+                this.nextSlide();
+                handled = true;
+                break;
+                
+            case 'MediaTrackPrevious':
+                this.previousSlide();
+                handled = true;
+                break;
+                
+            // TV Remote keys (some browsers support these)
+            case 'ChannelUp':
+                this.nextSlide();
+                handled = true;
+                break;
+                
+            case 'ChannelDown':
+                this.previousSlide();
+                handled = true;
+                break;
+        }
+        
+        // Only handle keyCode events if the modern key event wasn't handled
+        // This is for older browsers or specific remote controls
+        if (!handled) {
+            switch(e.keyCode) {
+                case 37: // Left arrow
+                case 38: // Up arrow
+                case 33: // Page Up
+                    this.previousSlide();
+                    break;
+                    
+                case 39: // Right arrow
+                case 40: // Down arrow
+                case 34: // Page Down
+                case 32: // Space
+                    this.nextSlide();
+                    break;
+                    
+                case 36: // Home
+                    this.showSlide(1);
+                    break;
+                    
+                case 35: // End
+                    this.showSlide(this.totalSlides);
+                    break;
+                    
+                // Number keys (48-57 are 0-9)
+                case 49: case 50: case 51: case 52: case 53:
+                case 54: case 55: case 56: case 57:
+                    const slideNumber = e.keyCode - 48;
+                    if (slideNumber <= this.totalSlides) {
+                        this.showSlide(slideNumber);
+                    }
+                    break;
+            }
         }
     }
     
     setupTouchGestures() {
-        let startX = 0;
-        let startY = 0;
-        let endX = 0;
-        let endY = 0;
+        // Touch/swipe support for touch-enabled remote controls
+        let touchStartX = 0;
+        let touchStartY = 0;
         
         document.addEventListener('touchstart', (e) => {
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
-        });
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
         
         document.addEventListener('touchend', (e) => {
-            endX = e.changedTouches[0].clientX;
-            endY = e.changedTouches[0].clientY;
+            if (!touchStartX || !touchStartY) return;
             
-            const deltaX = endX - startX;
-            const deltaY = endY - startY;
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
             
-            // Only trigger if horizontal swipe is dominant
-            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+            
+            // Minimum swipe distance
+            const minSwipeDistance = 50;
+            
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > minSwipeDistance) {
                 if (deltaX > 0) {
+                    // Swipe right - previous slide
                     this.previousSlide();
                 } else {
+                    // Swipe left - next slide
                     this.nextSlide();
                 }
             }
-        });
-    }
-    
-    addSlideSound() {
-        // Create a subtle audio feedback (optional)
-        if ('AudioContext' in window || 'webkitAudioContext' in window) {
-            try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-                oscillator.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.1);
-                
-                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-                
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.1);
-            } catch (e) {
-                // Audio not available or not allowed
-            }
-        }
-    }
-    
-    toggleFullscreen() {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(() => {
-                // Fullscreen not available
-            });
-        } else {
-            document.exitFullscreen();
-        }
+            
+            touchStartX = 0;
+            touchStartY = 0;
+        }, { passive: true });
     }
     
     goToSlide(slideNumber) {
         if (slideNumber >= 1 && slideNumber <= this.totalSlides) {
             this.showSlide(slideNumber);
         }
+    }
+    
+    // Expose navigation functions globally for external control
+    getCurrentSlide() {
+        return this.currentSlide;
+    }
+    
+    getTotalSlides() {
+        return this.totalSlides;
     }
 }
 
@@ -694,4 +850,18 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => loader.remove(), 500);
         }, 1000);
     }
+});
+
+// Initialize presentation when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    window.presentation = new Presentation();
+    
+    // Expose navigation functions globally for external control
+    window.presentationControl = {
+        nextSlide: () => window.presentation.nextSlide(),
+        previousSlide: () => window.presentation.previousSlide(),
+        goToSlide: (slideNumber) => window.presentation.goToSlide(slideNumber),
+        getCurrentSlide: () => window.presentation.getCurrentSlide(),
+        getTotalSlides: () => window.presentation.getTotalSlides()
+    };
 }); 

@@ -1173,4 +1173,23 @@
     .slide:last-child {
         page-break-after: avoid;
     }
+}
+
+/* Focus States for Keyboard Navigation */
+.nav-btn:focus-visible {
+    outline: 3px solid rgba(99, 102, 241, 0.6);
+    outline-offset: 2px;
+}
+
+.slide:focus-within {
+    box-shadow: var(--shadow-premium), 0 0 0 3px rgba(99, 102, 241, 0.3);
+}
+
+/* Hide navigation buttons since we're using remote control */
+.navigation {
+    display: none !important;
+}
+
+.nav-btn {
+    display: none !important;
 } 
